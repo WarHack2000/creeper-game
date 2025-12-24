@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creeper Survival!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+        }
+        #gameCanvas {
+            border: 4px solid #4a4a4a;
+            background: #87CEEB;
+            image-rendering: pixelated;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 20px;
+            text-shadow: 2px 2px 0 #000;
+            z-index: 10;
+        }
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 20;
+        }
+        #gameOverScreen {
+            display: none;
+        }
+        h1 {
+            font-size: 48px;
+            color: #4CAF50;
+            text-shadow: 4px 4px 0 #000;
+            margin-bottom: 20px;
+        }
+        .creeper-face {
+            font-size: 80px;
+            margin: 20px;
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            margin-top: 20px;
+            border: 4px solid #2E7D32;
+        }
+        button:hover {
+            background: #66BB6A;
+        }
+        .instructions {
+            margin-top: 20px;
+            text-align: center;
+            line-height: 1.8;
+        }
+        #finalScore {
+            font-size: 36px;
+            color: #FFD700;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui">
+            <div id="score">Diamonds: 0</div>
+            <div id="kills">Kills: 0</div>
+            <div id="ammo">Arrows: 10</div>
+            <div id="lives">Lives: 3</div>
+            <div id="level">Level: 1</div>
+        </div>
+        <div id="startScreen">
+            <h1>CREEPER SURVIVAL</h1>
+            <div class="creeper-face">💚</div>
+            <p style="font-size: 24px; color: #4CAF50;">Ssssssss... BOOM!</p>
+            <div class="instructions">
+                <p>Use ARROW KEYS or WASD to move</p>
+                <p>Press SPACE to swing your DIAMOND SWORD!</p>
+                <p>Press F or CLICK to shoot your BOW!</p>
+                <p>Press G to throw a BOMB!</p>
+                <p>Collect 💎 DIAMONDS for points + arrows</p>
+                <p>Kill the CREEPERS before they explode!</p>
+            </div>
+            <button onclick="startGame()">START GAME</button>
+        </div>
+        <div id="gameOverScreen">
+            <h1 style="color: #f44336;">GAME OVER</h1>
+            <div class="creeper-face">💥</div>
+            <div id="finalScore">Score: 0</div>
+            <button onclick="startGame()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let gameRunning = false;
+        let score = 0;
+        let kills = 0;
+        let lives = 3;
+        let level = 1;
+        let diamonds = [];
+        let creepers = [];
+        let explosions = [];
+        let particles = [];
+
+        // Sword state
+        const sword = {
+            attacking: false,
+            angle: 0,
+            targetAngle: 0,
+            cooldown: 0,
+            direction: 1 // 1 = right, -1 = left
+        };
+
+        // Bow/Gun state
+        let arrows = [];
+        let ammo = 10;
+        let bowCooldown = 0;
+
+        // Player
+        const player = {
+            x: 400,
+            y: 300,
+            width: 32,
+            height: 48,
+            speed: 5,
+            dx: 0,
+            dy: 0,
+            invincible: false,
+            invincibleTimer: 0
+        };
+
+        // Controls
+        const keys = {};
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                e.preventDefault();
+            }
+            // Sword attack on space
+            if (e.key === ' ' && gameRunning && !sword.attacking && sword.cooldown <= 0) {
+                sword.attacking = true;
+                sword.angle = -Math.PI / 2;
+                sword.targetAngle = Math.PI / 2;
+            }
+            // Shoot arrow on F
+            if (e.key.toLowerCase() === 'f' && gameRunning) {
+                shootArrow();
+            }
+            // Throw bomb on G
+            if (e.key.toLowerCase() === 'g' && gameRunning) {
+                throwBomb();
+            }
+        });
+
+        // Mouse click to shoot
+        canvas.addEventListener('click', (e) => {
+            if (gameRunning) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                shootArrowAtTarget(mouseX, mouseY);
+            }
+        });
+
+        // Shoot arrow function
+        function shootArrow() {
+            if (ammo > 0 && bowCooldown <= 0) {
+                ammo--;
+                bowCooldown = 20;
+                updateUI();
+
+                arrows.push({
+                    x: player.x + player.width / 2,
+                    y: player.y + player.height / 2,
+                    vx: 12 * sword.direction,
+                    vy: 0,
+                    width: 20,
+                    height: 4
+                });
+            }
+        }
+
+        // Shoot arrow at mouse target
+        function shootArrowAtTarget(targetX, targetY) {
+            if (ammo > 0 && bowCooldown <= 0) {
+                ammo--;
+                bowCooldown = 20;
+                updateUI();
+
+                const dx = targetX - (player.x + player.width / 2);
+                const dy = targetY - (player.y + player.height / 2);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const speed = 12;
+
+                arrows.push({
+                    x: player.x + player.width / 2,
+                    y: player.y + player.height / 2,
+                    vx: (dx / dist) * speed,
+                    vy: (dy / dist) * speed,
+                    width: 20,
+                    height: 4
+                });
+
+                // Update facing direction
+                if (dx > 0) sword.direction = 1;
+                else sword.direction = -1;
+            }
+        }
+
+        // Throw bomb function
+        let bombs = [];
+        function throwBomb() {
+            if (bowCooldown <= 0) {
+                bowCooldown = 30;
+
+                bombs.push({
+                    x: player.x + player.width / 2,
+                    y: player.y + player.height / 2,
+                    vx: 6 * sword.direction,
+                    vy: -4,
+                    timer: 60,
+                    radius: 8
+                });
+            }
+        }
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        // Draw pixelated Steve (player)
+        function drawPlayer() {
+            const x = player.x;
+            const y = player.y;
+            const w = player.width;
+            const h = player.height;
+
+            if (player.invincible && Math.floor(Date.now() / 100) % 2 === 0) {
+                ctx.globalAlpha = 0.5;
+            }
+
+            // Body (blue shirt)
+            ctx.fillStyle = '#00AAFF';
+            ctx.fillRect(x + 4, y + 20, 24, 16);
+
+            // Head (skin)
+            ctx.fillStyle = '#D4A574';
+            ctx.fillRect(x + 4, y, 24, 20);
+
+            // Hair (brown)
+            ctx.fillStyle = '#6B4423';
+            ctx.fillRect(x + 4, y, 24, 8);
+            ctx.fillRect(x + 4, y + 8, 4, 4);
+            ctx.fillRect(x + 24, y + 8, 4, 4);
+
+            // Eyes
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(x + 8, y + 10, 6, 4);
+            ctx.fillRect(x + 18, y + 10, 6, 4);
+            ctx.fillStyle = '#4169E1';
+            ctx.fillRect(x + 10, y + 10, 4, 4);
+            ctx.fillRect(x + 20, y + 10, 4, 4);
+
+            // Mouth
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(x + 12, y + 16, 8, 2);
+
+            // Legs (blue pants)
+            ctx.fillStyle = '#1E3A5F';
+            ctx.fillRect(x + 6, y + 36, 8, 12);
+            ctx.fillRect(x + 18, y + 36, 8, 12);
+
+            ctx.globalAlpha = 1;
+        }
+
+        // Draw Sword
+        function drawSword() {
+            const centerX = player.x + player.width / 2;
+            const centerY = player.y + player.height / 2;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(sword.angle * sword.direction);
+            if (sword.direction === -1) {
+                ctx.scale(-1, 1);
+            }
+
+            // Sword handle (brown)
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(-4, 0, 8, 16);
+
+            // Sword guard (gold)
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(-12, -4, 24, 8);
+
+            // Sword blade (diamond/cyan)
+            ctx.fillStyle = '#00FFFF';
+            ctx.beginPath();
+            ctx.moveTo(-6, -4);
+            ctx.lineTo(6, -4);
+            ctx.lineTo(4, -40);
+            ctx.lineTo(0, -50);
+            ctx.lineTo(-4, -40);
+            ctx.closePath();
+            ctx.fill();
+
+            // Blade shine
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(-2, -35, 3, 20);
+
+            // Blade edge
+            ctx.fillStyle = '#00CED1';
+            ctx.beginPath();
+            ctx.moveTo(2, -4);
+            ctx.lineTo(4, -40);
+            ctx.lineTo(0, -50);
+            ctx.lineTo(2, -40);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // Draw Arrow
+        function drawArrow(arrow) {
+            ctx.save();
+            ctx.translate(arrow.x, arrow.y);
+            ctx.rotate(Math.atan2(arrow.vy, arrow.vx));
+
+            // Arrow shaft
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(-15, -2, 25, 4);
+
+            // Arrow head
+            ctx.fillStyle = '#808080';
+            ctx.beginPath();
+            ctx.moveTo(10, -4);
+            ctx.lineTo(18, 0);
+            ctx.lineTo(10, 4);
+            ctx.closePath();
+            ctx.fill();
+
+            // Feathers
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(-15, -4, 6, 2);
+            ctx.fillRect(-15, 2, 6, 2);
+
+            ctx.restore();
+        }
+
+        // Draw Bomb
+        function drawBomb(bomb) {
+            // Bomb body
+            ctx.fillStyle = '#333333';
+            ctx.beginPath();
+            ctx.arc(bomb.x, bomb.y, bomb.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Fuse
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(bomb.x, bomb.y - bomb.radius);
+            ctx.lineTo(bomb.x + 4, bomb.y - bomb.radius - 8);
+            ctx.stroke();
+
+            // Spark
+            if (Math.floor(Date.now() / 100) % 2 === 0) {
+                ctx.fillStyle = '#FF6600';
+                ctx.beginPath();
+                ctx.arc(bomb.x + 4, bomb.y - bomb.radius - 10, 4, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = '#FFFF00';
+                ctx.beginPath();
+                ctx.arc(bomb.x + 4, bomb.y - bomb.radius - 10, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Highlight
+            ctx.fillStyle = '#555555';
+            ctx.beginPath();
+            ctx.arc(bomb.x - 3, bomb.y - 3, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw Creeper
+        function drawCreeper(creeper) {
+            const x = creeper.x;
+            const y = creeper.y;
+            const w = creeper.width;
+            const h = creeper.height;
+
+            // Flash when about to explode
+            if (creeper.aboutToExplode && Math.floor(Date.now() / 100) % 2 === 0) {
+                ctx.fillStyle = '#FFFFFF';
+            } else {
+                ctx.fillStyle = '#4CAF50';
+            }
+
+            // Body
+            ctx.fillRect(x, y, w, h);
+
+            // Darker green patches
+            ctx.fillStyle = '#388E3C';
+            ctx.fillRect(x + 4, y + 8, 8, 8);
+            ctx.fillRect(x + 20, y + 16, 8, 8);
+            ctx.fillRect(x + 8, y + 32, 12, 8);
+
+            // Face - Eyes
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(x + 4, y + 8, 8, 8);
+            ctx.fillRect(x + 20, y + 8, 8, 8);
+
+            // Face - Mouth (creeper frown)
+            ctx.fillRect(x + 12, y + 20, 8, 4);
+            ctx.fillRect(x + 8, y + 24, 4, 8);
+            ctx.fillRect(x + 20, y + 24, 4, 8);
+            ctx.fillRect(x + 8, y + 32, 16, 4);
+
+            // Feet
+            ctx.fillStyle = '#388E3C';
+            ctx.fillRect(x + 2, y + h - 8, 10, 8);
+            ctx.fillRect(x + 20, y + h - 8, 10, 8);
+        }
+
+        // Draw Diamond
+        function drawDiamond(diamond) {
+            const x = diamond.x;
+            const y = diamond.y;
+
+            // Diamond shape
+            ctx.fillStyle = '#00FFFF';
+            ctx.beginPath();
+            ctx.moveTo(x + 16, y);
+            ctx.lineTo(x + 32, y + 12);
+            ctx.lineTo(x + 16, y + 32);
+            ctx.lineTo(x, y + 12);
+            ctx.closePath();
+            ctx.fill();
+
+            // Shine
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(x + 8, y + 8, 6, 6);
+
+            // Darker facets
+            ctx.fillStyle = '#00CED1';
+            ctx.beginPath();
+            ctx.moveTo(x + 16, y + 12);
+            ctx.lineTo(x + 32, y + 12);
+            ctx.lineTo(x + 16, y + 32);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Draw explosion
+        function drawExplosion(exp) {
+            const progress = exp.timer / exp.maxTimer;
+            const radius = exp.radius * (1 - progress * 0.3);
+
+            // Outer ring
+            ctx.fillStyle = `rgba(255, 100, 0, ${1 - progress})`;
+            ctx.beginPath();
+            ctx.arc(exp.x, exp.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Inner ring
+            ctx.fillStyle = `rgba(255, 255, 0, ${1 - progress})`;
+            ctx.beginPath();
+            ctx.arc(exp.x, exp.y, radius * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Core
+            ctx.fillStyle = `rgba(255, 255, 255, ${1 - progress})`;
+            ctx.beginPath();
+            ctx.arc(exp.x, exp.y, radius * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw particles
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        // Draw grass ground
+        function drawGround() {
+            // Sky gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(0.7, '#87CEEB');
+            gradient.addColorStop(1, '#90EE90');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Grass blocks at bottom
+            ctx.fillStyle = '#228B22';
+            ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+
+            // Dirt under grass
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+
+            // Grass texture
+            ctx.fillStyle = '#32CD32';
+            for (let i = 0; i < canvas.width; i += 20) {
+                ctx.fillRect(i, canvas.height - 44, 4, 8);
+                ctx.fillRect(i + 10, canvas.height - 42, 4, 6);
+            }
+
+            // Some clouds
+            ctx.fillStyle = '#FFFFFF';
+            drawCloud(100, 80);
+            drawCloud(400, 50);
+            drawCloud(650, 100);
+        }
+
+        function drawCloud(x, y) {
+            ctx.fillRect(x, y, 60, 20);
+            ctx.fillRect(x + 10, y - 10, 40, 20);
+            ctx.fillRect(x - 10, y + 5, 20, 15);
+            ctx.fillRect(x + 50, y + 5, 20, 15);
+        }
+
+        // Spawn diamond
+        function spawnDiamond() {
+            diamonds.push({
+                x: Math.random() * (canvas.width - 64) + 16,
+                y: Math.random() * (canvas.height - 150) + 50,
+                width: 32,
+                height: 32
+            });
+        }
+
+        // Spawn creeper
+        function spawnCreeper() {
+            const side = Math.floor(Math.random() * 4);
+            let x, y;
+
+            switch(side) {
+                case 0: x = -40; y = Math.random() * canvas.height; break;
+                case 1: x = canvas.width + 40; y = Math.random() * canvas.height; break;
+                case 2: x = Math.random() * canvas.width; y = -50; break;
+                case 3: x = Math.random() * canvas.width; y = canvas.height + 50; break;
+            }
+
+            creepers.push({
+                x: x,
+                y: y,
+                width: 32,
+                height: 48,
+                speed: 1.5 + level * 0.3,
+                aboutToExplode: false,
+                explodeTimer: 0
+            });
+        }
+
+        // Create explosion
+        function createExplosion(x, y) {
+            explosions.push({
+                x: x,
+                y: y,
+                radius: 60,
+                timer: 0,
+                maxTimer: 30
+            });
+
+            // Particles
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    size: Math.random() * 8 + 4,
+                    color: ['#4CAF50', '#388E3C', '#2E7D32', '#1B5E20'][Math.floor(Math.random() * 4)],
+                    life: 1
+                });
+            }
+        }
+
+        // Collision detection
+        function collides(a, b) {
+            return a.x < b.x + b.width &&
+                   a.x + a.width > b.x &&
+                   a.y < b.y + b.height &&
+                   a.y + a.height > b.y;
+        }
+
+        // Update game
+        function update() {
+            if (!gameRunning) return;
+
+            // Player movement
+            player.dx = 0;
+            player.dy = 0;
+
+            if (keys['arrowleft'] || keys['a']) {
+                player.dx = -player.speed;
+                sword.direction = -1;
+            }
+            if (keys['arrowright'] || keys['d']) {
+                player.dx = player.speed;
+                sword.direction = 1;
+            }
+            if (keys['arrowup'] || keys['w']) player.dy = -player.speed;
+            if (keys['arrowdown'] || keys['s']) player.dy = player.speed;
+
+            player.x += player.dx;
+            player.y += player.dy;
+
+            // Update sword
+            if (sword.attacking) {
+                sword.angle += 0.25;
+                if (sword.angle >= sword.targetAngle) {
+                    sword.attacking = false;
+                    sword.cooldown = 15;
+                }
+
+                // Check sword hits on creepers
+                const swordTipX = player.x + player.width / 2 + Math.sin(sword.angle * sword.direction) * 50 * sword.direction;
+                const swordTipY = player.y + player.height / 2 - Math.cos(sword.angle) * 50;
+
+                creepers.forEach(creeper => {
+                    const creeperCenterX = creeper.x + creeper.width / 2;
+                    const creeperCenterY = creeper.y + creeper.height / 2;
+                    const dist = Math.sqrt(Math.pow(swordTipX - creeperCenterX, 2) + Math.pow(swordTipY - creeperCenterY, 2));
+
+                    if (dist < 40 && !creeper.hit) {
+                        creeper.hit = true;
+                        creeper.dead = true;
+                        kills++;
+                        updateUI();
+
+                        // Death particles
+                        for (let i = 0; i < 15; i++) {
+                            particles.push({
+                                x: creeperCenterX,
+                                y: creeperCenterY,
+                                vx: (Math.random() - 0.5) * 8,
+                                vy: (Math.random() - 0.5) * 8 - 2,
+                                size: Math.random() * 6 + 3,
+                                color: ['#4CAF50', '#388E3C', '#2E7D32'][Math.floor(Math.random() * 3)],
+                                life: 1
+                            });
+                        }
+                    }
+                });
+            }
+
+            if (sword.cooldown > 0) {
+                sword.cooldown--;
+            }
+
+            // Update bow cooldown
+            if (bowCooldown > 0) {
+                bowCooldown--;
+            }
+
+            // Update arrows
+            arrows.forEach(arrow => {
+                arrow.x += arrow.vx;
+                arrow.y += arrow.vy;
+
+                // Check arrow hits on creepers
+                creepers.forEach(creeper => {
+                    const creeperCenterX = creeper.x + creeper.width / 2;
+                    const creeperCenterY = creeper.y + creeper.height / 2;
+                    const dist = Math.sqrt(Math.pow(arrow.x - creeperCenterX, 2) + Math.pow(arrow.y - creeperCenterY, 2));
+
+                    if (dist < 30 && !creeper.hit) {
+                        creeper.hit = true;
+                        creeper.dead = true;
+                        arrow.dead = true;
+                        kills++;
+                        updateUI();
+
+                        // Death particles
+                        for (let i = 0; i < 15; i++) {
+                            particles.push({
+                                x: creeperCenterX,
+                                y: creeperCenterY,
+                                vx: (Math.random() - 0.5) * 8,
+                                vy: (Math.random() - 0.5) * 8 - 2,
+                                size: Math.random() * 6 + 3,
+                                color: ['#4CAF50', '#388E3C', '#2E7D32'][Math.floor(Math.random() * 3)],
+                                life: 1
+                            });
+                        }
+                    }
+                });
+
+                // Remove arrows that go off screen
+                if (arrow.x < -50 || arrow.x > canvas.width + 50 || arrow.y < -50 || arrow.y > canvas.height + 50) {
+                    arrow.dead = true;
+                }
+            });
+            arrows = arrows.filter(a => !a.dead);
+
+            // Update bombs
+            bombs.forEach(bomb => {
+                bomb.x += bomb.vx;
+                bomb.y += bomb.vy;
+                bomb.vy += 0.2; // Gravity
+                bomb.timer--;
+
+                // Bounce off ground
+                if (bomb.y > canvas.height - 50) {
+                    bomb.y = canvas.height - 50;
+                    bomb.vy = -bomb.vy * 0.5;
+                    bomb.vx *= 0.8;
+                }
+
+                // Explode when timer runs out
+                if (bomb.timer <= 0) {
+                    bomb.dead = true;
+                    createExplosion(bomb.x, bomb.y);
+
+                    // Damage creepers in blast radius
+                    creepers.forEach(creeper => {
+                        const creeperCenterX = creeper.x + creeper.width / 2;
+                        const creeperCenterY = creeper.y + creeper.height / 2;
+                        const dist = Math.sqrt(Math.pow(bomb.x - creeperCenterX, 2) + Math.pow(bomb.y - creeperCenterY, 2));
+
+                        if (dist < 80 && !creeper.hit) {
+                            creeper.hit = true;
+                            creeper.dead = true;
+                            kills++;
+                            updateUI();
+
+                            // Death particles
+                            for (let i = 0; i < 15; i++) {
+                                particles.push({
+                                    x: creeperCenterX,
+                                    y: creeperCenterY,
+                                    vx: (Math.random() - 0.5) * 10,
+                                    vy: (Math.random() - 0.5) * 10 - 3,
+                                    size: Math.random() * 6 + 3,
+                                    color: ['#4CAF50', '#388E3C', '#2E7D32'][Math.floor(Math.random() * 3)],
+                                    life: 1
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+            bombs = bombs.filter(b => !b.dead);
+
+            // Keep player in bounds
+            player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height - player.height - 40, player.y));
+
+            // Update invincibility
+            if (player.invincible) {
+                player.invincibleTimer--;
+                if (player.invincibleTimer <= 0) {
+                    player.invincible = false;
+                }
+            }
+
+            // Update creepers
+            creepers.forEach(creeper => {
+                const dx = player.x - creeper.x;
+                const dy = player.y - creeper.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 0) {
+                    creeper.x += (dx / dist) * creeper.speed;
+                    creeper.y += (dy / dist) * creeper.speed;
+                }
+
+                // Check if close to player
+                if (dist < 50) {
+                    creeper.aboutToExplode = true;
+                    creeper.explodeTimer++;
+
+                    if (creeper.explodeTimer > 60) {
+                        createExplosion(creeper.x + 16, creeper.y + 24);
+                        creeper.dead = true;
+
+                        // Check if player is in explosion range
+                        if (dist < 70 && !player.invincible) {
+                            lives--;
+                            player.invincible = true;
+                            player.invincibleTimer = 120;
+                            updateUI();
+
+                            if (lives <= 0) {
+                                gameOver();
+                            }
+                        }
+                    }
+                } else {
+                    creeper.aboutToExplode = false;
+                    creeper.explodeTimer = Math.max(0, creeper.explodeTimer - 1);
+                }
+            });
+
+            // Remove dead creepers
+            creepers = creepers.filter(c => !c.dead);
+
+            // Update explosions
+            explosions.forEach(exp => {
+                exp.timer++;
+            });
+            explosions = explosions.filter(exp => exp.timer < exp.maxTimer);
+
+            // Update particles
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.3;
+                p.life -= 0.02;
+            });
+            particles = particles.filter(p => p.life > 0);
+
+            // Check diamond collection
+            diamonds.forEach((diamond, index) => {
+                if (collides(player, diamond)) {
+                    diamonds.splice(index, 1);
+                    score++;
+                    ammo += 3; // Get 3 arrows per diamond
+                    updateUI();
+
+                    // Level up every 5 diamonds
+                    if (score % 5 === 0) {
+                        level++;
+                        updateUI();
+                        // Spawn extra creepers on level up
+                        for (let i = 0; i < level; i++) {
+                            setTimeout(() => spawnCreeper(), i * 500);
+                        }
+                    }
+
+                    spawnDiamond();
+                }
+            });
+
+            // Spawn creepers periodically
+            if (Math.random() < 0.01 * level && creepers.length < 5 + level * 2) {
+                spawnCreeper();
+            }
+        }
+
+        // Draw game
+        function draw() {
+            drawGround();
+
+            // Draw diamonds
+            diamonds.forEach(drawDiamond);
+
+            // Draw creepers
+            creepers.forEach(drawCreeper);
+
+            // Draw player
+            drawPlayer();
+
+            // Draw sword
+            drawSword();
+
+            // Draw arrows
+            arrows.forEach(drawArrow);
+
+            // Draw bombs
+            bombs.forEach(drawBomb);
+
+            // Draw explosions
+            explosions.forEach(drawExplosion);
+
+            // Draw particles
+            drawParticles();
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Update UI
+        function updateUI() {
+            document.getElementById('score').textContent = `Diamonds: ${score}`;
+            document.getElementById('kills').textContent = `Kills: ${kills}`;
+            document.getElementById('ammo').textContent = `Arrows: ${ammo}`;
+            document.getElementById('lives').textContent = `Lives: ${lives}`;
+            document.getElementById('level').textContent = `Level: ${level}`;
+        }
+
+        // Start game
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+
+            // Reset game state
+            score = 0;
+            kills = 0;
+            lives = 3;
+            level = 1;
+            player.x = 400;
+            player.y = 300;
+            player.invincible = false;
+            sword.attacking = false;
+            sword.angle = 0;
+            sword.cooldown = 0;
+            sword.direction = 1;
+            arrows = [];
+            bombs = [];
+            ammo = 10;
+            bowCooldown = 0;
+            diamonds = [];
+            creepers = [];
+            explosions = [];
+            particles = [];
+
+            // Spawn initial diamonds
+            for (let i = 0; i < 3; i++) {
+                spawnDiamond();
+            }
+
+            // Spawn initial creeper
+            setTimeout(spawnCreeper, 2000);
+
+            updateUI();
+            gameRunning = true;
+        }
+
+        // Game over
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('gameOverScreen').style.display = 'flex';
+            document.getElementById('finalScore').textContent = `Diamonds: ${score} | Kills: ${kills} | Level: ${level}`;
+        }
+
+        // Initialize
+        gameLoop();
+    </script>
+</body>
+</html>
