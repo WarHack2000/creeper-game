@@ -54,7 +54,7 @@
 </head>
 <body>
     <h1>BLOCK WORLD</h1>
-    <p class="subtitle">100 LEVELS - 4 BOSSES - 33 CHARACTERS</p>
+    <p class="subtitle">100 LEVELS - 4 BOSSES - 38 CHARACTERS</p>
     <canvas id="gameCanvas" width="800" height="450"></canvas>
     <div class="score-board">
         <div class="score-item level">LEVEL: <span id="level">1</span>/100</div>
@@ -153,7 +153,17 @@
             { name: 'HOT DOG', bodyColor: '#c1440e', headColor: '#daa520', hairColor: null, hasHelmet: false, hasMask: false, hasWizardHat: false, isHotDog: true,
               ability: 'MUSTARD BLAST', abilityDesc: 'Spray mustard everywhere!', cooldown: 50 },
             { name: 'GOD MODE', bodyColor: '#ffd700', headColor: '#ffd700', hairColor: '#fff', hasHelmet: false, hasMask: false, hasWizardHat: false, isGodMode: true,
-              ability: 'ALL POWERS', abilityDesc: 'EVERY ABILITY AT ONCE!!!', cooldown: 5, noClip: true, infiniteLives: true, oneShot: true }
+              ability: 'ALL POWERS', abilityDesc: 'EVERY ABILITY AT ONCE!!!', cooldown: 5, noClip: true, infiniteLives: true, oneShot: true },
+            { name: 'CAT', bodyColor: '#ff8c00', headColor: '#ff8c00', hairColor: '#fff', hasHelmet: false, hasMask: false, hasWizardHat: false, isCat: true,
+              ability: 'POUNCE', abilityDesc: '9 lives + scratch attack!', cooldown: 30, hasNineLives: true },
+            { name: 'LASER BOT', bodyColor: '#00ffff', headColor: '#0099ff', hairColor: null, hasHelmet: false, hasMask: false, hasWizardHat: false, isLaserBot: true,
+              ability: 'MEGA LASER', abilityDesc: 'Shoot laser 4 blocks high!', cooldown: 40 },
+            { name: 'SHADOW REAPER', bodyColor: '#1a0033', headColor: '#000', hairColor: '#660066', hasHelmet: false, hasMask: false, hasWizardHat: false, isShadowReaper: true,
+              ability: 'DEATH WAVE', abilityDesc: 'Instant kill + teleport!', cooldown: 25 },
+            { name: 'GLITCH', bodyColor: '#00ff00', headColor: '#ff00ff', hairColor: '#00ffff', hasHelmet: false, hasMask: false, hasWizardHat: false, isGlitch: true,
+              ability: 'CORRUPT', abilityDesc: 'Glitch enemies to death!', cooldown: 20 },
+            { name: 'INFINITY', bodyColor: '#fff', headColor: '#ffd700', hairColor: '#ff00ff', hasHelmet: false, hasMask: false, hasWizardHat: false, isInfinity: true,
+              ability: 'EVERYTHING', abilityDesc: 'ALL POWERS - NO LIMITS!!!', cooldown: 1, noClip: true, infiniteLives: true, oneShot: true }
         ];
         let currentChar = 0;
         let canDoubleJump = false;
@@ -748,6 +758,310 @@
                         createParticles(player.x + 20, player.y + 30, '#00ff00', 1);
                     }
                     break;
+                case 33: // Cat - POUNCE attack!
+                    // Pounce forward with scratch attack
+                    player.velX = player.facingRight ? 20 : -20;
+                    player.velY = -8;
+                    invincible = true;
+                    invincibleTimer = 30;
+
+                    // Scratch marks (claw attack)
+                    for (let i = 0; i < 3; i++) {
+                        fireballs.push({
+                            x: player.x + (player.facingRight ? 40 : 0),
+                            y: player.y + 20 + i * 15,
+                            velX: player.facingRight ? 15 : -15,
+                            velY: (Math.random() - 0.5) * 5,
+                            size: 8,
+                            isScratch: true
+                        });
+                    }
+
+                    // Cat particles
+                    for (let i = 0; i < 20; i++) {
+                        createParticles(player.x + 20, player.y + 30, '#ff8c00', 1);
+                    }
+
+                    // Meow damage - hurt nearby enemies
+                    for (let enemy of enemies) {
+                        if (enemy.alive) {
+                            const dx = Math.abs(enemy.x - player.x);
+                            const dy = Math.abs(enemy.y - player.y);
+                            if (dx < 100 && dy < 60) {
+                                enemy.alive = false;
+                                enemiesKilled++;
+                                score += 200;
+                                document.getElementById('score').textContent = score;
+                                createParticles(enemy.x + 17, enemy.y + 25, '#ff0000', 15);
+                            }
+                        }
+                    }
+                    break;
+                case 34: // Laser Bot - MEGA LASER 4 blocks high!
+                    // Shoot 4 vertical lasers going up (4 blocks = ~320 pixels)
+                    for (let i = 0; i < 4; i++) {
+                        fireballs.push({
+                            x: player.x + 20,
+                            y: player.y - (i * 80),
+                            velX: player.facingRight ? 25 : -25,
+                            velY: 0,
+                            size: 15,
+                            isLaser: true,
+                            laserHeight: i
+                        });
+                    }
+
+                    // Vertical beam effect
+                    for (let i = 0; i < 320; i += 20) {
+                        createParticles(player.x + 20, player.y - i, '#00ffff', 2);
+                        createParticles(player.x + 20, player.y - i, '#0099ff', 1);
+                    }
+
+                    // Kill enemies in the laser path (4 blocks high)
+                    for (let enemy of enemies) {
+                        if (enemy.alive) {
+                            const dx = enemy.x - player.x;
+                            const dy = player.y - enemy.y;
+                            // Check if enemy is in front and within 4 blocks height
+                            if ((player.facingRight && dx > 0 && dx < 400) || (!player.facingRight && dx < 0 && dx > -400)) {
+                                if (dy >= -50 && dy <= 320) {
+                                    enemy.alive = false;
+                                    enemiesKilled++;
+                                    score += 200;
+                                    createParticles(enemy.x + 17, enemy.y + 25, '#00ffff', 20);
+                                }
+                            }
+                        }
+                    }
+
+                    // Damage boss if in range
+                    if (boss) {
+                        const dx = boss.x - player.x;
+                        const dy = player.y - boss.y;
+                        if ((player.facingRight && dx > 0 && dx < 400) || (!player.facingRight && dx < 0 && dx > -400)) {
+                            if (dy >= -50 && dy <= 320) {
+                                boss.health -= 3;
+                                createParticles(boss.x + 40, boss.y + 50, '#00ffff', 25);
+                                if (boss.health <= 0) {
+                                    score += 1000;
+                                    document.getElementById('score').textContent = score;
+                                    boss = null;
+                                    levelComplete();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+
+                    document.getElementById('score').textContent = score;
+                    break;
+                case 35: // Shadow Reaper - DEATH WAVE
+                    // Teleport forward
+                    player.x += player.facingRight ? 150 : -150;
+                    player.x = Math.max(0, Math.min(canvas.width - 40, player.x));
+
+                    // Death wave - kill everything on screen
+                    for (let enemy of enemies) {
+                        if (enemy.alive) {
+                            enemy.alive = false;
+                            enemiesKilled++;
+                            score += 200;
+                            // Dark death particles
+                            for (let j = 0; j < 15; j++) {
+                                createParticles(enemy.x + 17, enemy.y + 25, '#660066', 1);
+                                createParticles(enemy.x + 17, enemy.y + 25, '#000', 1);
+                            }
+                        }
+                    }
+
+                    // Spawn shadow skulls flying outward
+                    for (let i = 0; i < 12; i++) {
+                        const angle = (i / 12) * Math.PI * 2;
+                        fireballs.push({
+                            x: player.x + 20,
+                            y: player.y + 30,
+                            velX: Math.cos(angle) * 15,
+                            velY: Math.sin(angle) * 15,
+                            size: 12,
+                            isSkull: true
+                        });
+                    }
+
+                    // Invincible during death wave
+                    invincible = true;
+                    invincibleTimer = 60;
+
+                    // Dark explosion effect
+                    for (let i = 0; i < 80; i++) {
+                        createParticles(player.x + 20, player.y + 30, '#660066', 1);
+                        createParticles(player.x + 20, player.y + 30, '#1a0033', 1);
+                        createParticles(player.x + 20, player.y + 30, '#ff0000', 1);
+                    }
+
+                    // Damage boss heavily
+                    if (boss) {
+                        boss.health -= 4;
+                        createParticles(boss.x + 40, boss.y + 50, '#660066', 30);
+                        if (boss.health <= 0) {
+                            score += 1000;
+                            document.getElementById('score').textContent = score;
+                            boss = null;
+                            levelComplete();
+                            return;
+                        }
+                    }
+
+                    document.getElementById('score').textContent = score;
+                    break;
+                case 36: // Glitch - CORRUPT
+                    // Glitch all enemies - visual corruption effect then death
+                    for (let enemy of enemies) {
+                        if (enemy.alive) {
+                            enemy.alive = false;
+                            enemiesKilled++;
+                            score += 150;
+                            // Glitch particles - neon colors
+                            for (let j = 0; j < 20; j++) {
+                                const glitchColors = ['#00ff00', '#ff00ff', '#00ffff', '#ff0000', '#ffff00'];
+                                createParticles(enemy.x + 17 + (Math.random() - 0.5) * 30, enemy.y + 25 + (Math.random() - 0.5) * 30,
+                                    glitchColors[Math.floor(Math.random() * glitchColors.length)], 1);
+                            }
+                        }
+                    }
+
+                    // Glitch projectiles flying in random directions
+                    for (let i = 0; i < 16; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        fireballs.push({
+                            x: player.x + 20,
+                            y: player.y + 30,
+                            velX: Math.cos(angle) * (8 + Math.random() * 8),
+                            velY: Math.sin(angle) * (8 + Math.random() * 8),
+                            size: 8 + Math.random() * 6,
+                            isGlitchBolt: true
+                        });
+                    }
+
+                    // Glitch BOMBS - 8 bombs in all directions
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (i / 8) * Math.PI * 2;
+                        godBombs.push({
+                            x: player.x + 20,
+                            y: player.y + 30,
+                            velX: Math.cos(angle) * 10,
+                            velY: Math.sin(angle) * 8 - 5,
+                            timer: 60 + i * 10,
+                            isGlitchBomb: true
+                        });
+                    }
+
+                    // Glitch SNIPER LASERS - 10 beams across screen
+                    for (let i = 0; i < 10; i++) {
+                        fireballs.push({
+                            x: player.x + 20,
+                            y: player.y + 30,
+                            velX: player.facingRight ? 25 : -25,
+                            velY: (i - 5) * 3,
+                            size: 8,
+                            isGlitchLaser: true
+                        });
+                    }
+
+                    // Corrupt/damage boss
+                    if (boss) {
+                        boss.health -= 5;
+                        for (let i = 0; i < 40; i++) {
+                            createParticles(boss.x + 40 + (Math.random() - 0.5) * 60, boss.y + 50 + (Math.random() - 0.5) * 60,
+                                ['#00ff00', '#ff00ff', '#00ffff'][Math.floor(Math.random() * 3)], 1);
+                        }
+                        if (boss.health <= 0) {
+                            score += 1000;
+                            document.getElementById('score').textContent = score;
+                            boss = null;
+                            levelComplete();
+                            return;
+                        }
+                    }
+
+                    document.getElementById('score').textContent = score;
+                    break;
+                case 37: // Infinity - EVERYTHING
+                    // KILL ALL ENEMIES INSTANTLY
+                    for (let enemy of enemies) {
+                        if (enemy.alive) {
+                            enemy.alive = false;
+                            enemiesKilled++;
+                            score += 500;
+                            // Rainbow explosion
+                            const rainbowColors = ['#ff0000', '#ff7700', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff'];
+                            for (let j = 0; j < 30; j++) {
+                                createParticles(enemy.x + 17, enemy.y + 25, rainbowColors[j % 7], 1);
+                            }
+                        }
+                    }
+
+                    // MASSIVE PROJECTILE STORM - 20 of each type!
+                    for (let i = 0; i < 20; i++) {
+                        const angle = (i / 20) * Math.PI * 2;
+                        // Fireballs
+                        fireballs.push({ x: player.x + 20, y: player.y + 30, velX: Math.cos(angle) * 12, velY: Math.sin(angle) * 12, size: 15 });
+                        // Skulls
+                        fireballs.push({ x: player.x + 20, y: player.y + 30, velX: Math.cos(angle + 0.1) * 10, velY: Math.sin(angle + 0.1) * 10, size: 12, isSkull: true });
+                        // Glitch bolts
+                        fireballs.push({ x: player.x + 20, y: player.y + 30, velX: Math.cos(angle + 0.2) * 14, velY: Math.sin(angle + 0.2) * 14, size: 10, isGlitchBolt: true });
+                    }
+
+                    // 15 BOMBS
+                    for (let i = 0; i < 15; i++) {
+                        const angle = (i / 15) * Math.PI * 2;
+                        godBombs.push({ x: player.x + 20, y: player.y + 30, velX: Math.cos(angle) * 12, velY: Math.sin(angle) * 8 - 8, timer: 40 + i * 5, radius: 15 });
+                    }
+
+                    // 20 SNIPER LASERS in all directions
+                    for (let i = 0; i < 20; i++) {
+                        fireballs.push({ x: player.x + 20, y: player.y + 30, velX: (i % 2 === 0 ? 30 : -30), velY: (i - 10) * 2, size: 10, isGlitchLaser: true });
+                    }
+
+                    // 10 MEGA LASERS (4 blocks high)
+                    for (let i = 0; i < 10; i++) {
+                        fireballs.push({ x: player.x + 20, y: player.y - i * 40, velX: player.facingRight ? 20 : -20, velY: 0, size: 20, isMegaLaser: true });
+                    }
+
+                    // 5 TURRETS
+                    for (let i = 0; i < 5; i++) {
+                        turrets.push({ x: player.x - 200 + i * 100, y: player.y, timer: 300, fireRate: 0 });
+                    }
+
+                    // SPAWN PLATFORMS EVERYWHERE
+                    for (let i = 0; i < 8; i++) {
+                        tempPlatforms.push({ x: 100 + i * 80, y: 150 + Math.random() * 200, width: 80, timer: 600 });
+                    }
+
+                    // FLY + INVINCIBLE + FLOAT + FREEZE
+                    player.velY = -15;
+                    invincible = true;
+                    invincibleTimer = 180;
+                    floatTimer = 180;
+                    frozenTimer = 120;
+
+                    // TELEPORT FORWARD
+                    player.x += player.facingRight ? 200 : -200;
+                    player.x = Math.max(0, Math.min(canvas.width - 40, player.x));
+
+                    // INSTANT KILL BOSS
+                    if (boss) {
+                        boss.health = 0;
+                        score += 2000;
+                        for (let i = 0; i < 100; i++) {
+                            createParticles(boss.x + 40, boss.y + 50, ['#ff0000', '#ffd700', '#ff00ff', '#00ffff'][i % 4], 1);
+                        }
+                        boss = null;
+                        levelComplete();
+                        return;
+                    }
+
+                    document.getElementById('score').textContent = score;
+                    break;
             }
         }
 
@@ -790,6 +1104,11 @@
             if (e.code === 'KeyM') { currentChar = 30; updateCharDisplay(); }
             if (e.code === 'Comma') { currentChar = 31; updateCharDisplay(); }
             if (e.code === 'Period') { currentChar = 32; updateCharDisplay(); }
+            if (e.code === 'Slash') { currentChar = 33; updateCharDisplay(); }
+            if (e.code === 'Backquote') { currentChar = 34; updateCharDisplay(); }
+            if (e.code === 'Minus') { currentChar = 35; updateCharDisplay(); }
+            if (e.code === 'Equal') { currentChar = 36; updateCharDisplay(); }
+            if (e.code === 'Backslash') { currentChar = 37; updateCharDisplay(); }
             if (e.code === 'KeyE') useAbility();
 
             // Double jump for adventurer
@@ -1399,6 +1718,275 @@
                 }
             }
 
+            if (c.isShadowReaper) {
+                // Dark aura
+                ctx.fillStyle = 'rgba(102, 0, 102, 0.4)';
+                ctx.beginPath();
+                ctx.arc(20, 30, 35 + Math.sin(Date.now() / 100) * 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Tattered cloak
+                ctx.fillStyle = '#1a0033';
+                ctx.beginPath();
+                ctx.moveTo(5, 15);
+                ctx.lineTo(-5, 65);
+                ctx.lineTo(10, 60);
+                ctx.lineTo(15, 68);
+                ctx.lineTo(25, 62);
+                ctx.lineTo(30, 70);
+                ctx.lineTo(40, 63);
+                ctx.lineTo(45, 65);
+                ctx.lineTo(35, 15);
+                ctx.closePath();
+                ctx.fill();
+
+                // Hood
+                ctx.fillStyle = '#0d001a';
+                ctx.beginPath();
+                ctx.arc(20, 10, 18, Math.PI, 2 * Math.PI);
+                ctx.fill();
+                ctx.fillRect(2, 5, 36, 20);
+
+                // Dark void face
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.ellipse(20, 12, 12, 10, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Glowing eyes
+                ctx.fillStyle = '#ff0000';
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.arc(14, 10, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(26, 10, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // Scythe
+                ctx.strokeStyle = '#4a4a4a';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(35, 50);
+                ctx.lineTo(45, -10);
+                ctx.stroke();
+                // Scythe blade
+                ctx.fillStyle = '#c0c0c0';
+                ctx.beginPath();
+                ctx.moveTo(45, -10);
+                ctx.quadraticCurveTo(70, -5, 60, 15);
+                ctx.quadraticCurveTo(50, 10, 45, -5);
+                ctx.fill();
+                // Blade edge
+                ctx.fillStyle = '#e0e0e0';
+                ctx.beginPath();
+                ctx.moveTo(47, -8);
+                ctx.quadraticCurveTo(65, -3, 58, 12);
+                ctx.lineTo(55, 8);
+                ctx.quadraticCurveTo(55, 0, 47, -5);
+                ctx.fill();
+
+                // Floating skull particles
+                ctx.fillStyle = '#660066';
+                for (let i = 0; i < 5; i++) {
+                    const angle = (Date.now() / 300 + i * 1.3) % (Math.PI * 2);
+                    const px = 20 + Math.cos(angle) * 25;
+                    const py = 35 + Math.sin(angle) * 20;
+                    ctx.beginPath();
+                    ctx.arc(px, py, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            if (c.isLaserBot) {
+                // Robot body
+                ctx.fillStyle = '#0099ff';
+                ctx.fillRect(5, 20, 30, 30);
+
+                // Robot head
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(3, 0, 34, 22);
+
+                // Visor/Eye
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(8, 6, 24, 8);
+                // Scanning light
+                ctx.fillStyle = '#ff6666';
+                const scanPos = 10 + Math.sin(Date.now() / 100) * 8;
+                ctx.fillRect(scanPos, 7, 6, 6);
+
+                // Antenna
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(18, -15, 4, 15);
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(20, -18, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Laser cannon on arm
+                ctx.fillStyle = '#333';
+                ctx.fillRect(32, 25, 15, 8);
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(44, 26, 6, 6);
+
+                // Chest light
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.arc(20, 32, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#88ff88';
+                ctx.beginPath();
+                ctx.arc(18, 30, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Legs
+                ctx.fillStyle = '#0077cc';
+                ctx.fillRect(8, 50, 10, 15);
+                ctx.fillRect(22, 50, 10, 15);
+
+                // Feet
+                ctx.fillStyle = '#005599';
+                ctx.fillRect(5, 62, 14, 6);
+                ctx.fillRect(21, 62, 14, 6);
+            }
+
+            if (c.isCat) {
+                // Cat body (orange tabby)
+                ctx.fillStyle = '#ff8c00';
+                // Body
+                ctx.beginPath();
+                ctx.ellipse(20, 35, 18, 22, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Cat head
+                ctx.beginPath();
+                ctx.arc(20, 10, 16, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Ears
+                ctx.beginPath();
+                ctx.moveTo(6, 5);
+                ctx.lineTo(2, -12);
+                ctx.lineTo(14, 0);
+                ctx.closePath();
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(34, 5);
+                ctx.lineTo(38, -12);
+                ctx.lineTo(26, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                // Inner ears (pink)
+                ctx.fillStyle = '#ffb6c1';
+                ctx.beginPath();
+                ctx.moveTo(7, 3);
+                ctx.lineTo(5, -6);
+                ctx.lineTo(12, 0);
+                ctx.closePath();
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(33, 3);
+                ctx.lineTo(35, -6);
+                ctx.lineTo(28, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                // White muzzle
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.ellipse(20, 15, 10, 8, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eyes
+                ctx.fillStyle = '#32cd32'; // Green cat eyes
+                ctx.beginPath();
+                ctx.ellipse(13, 8, 5, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(27, 8, 5, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Pupils (slits)
+                ctx.fillStyle = '#000';
+                ctx.fillRect(12, 5, 2, 7);
+                ctx.fillRect(26, 5, 2, 7);
+
+                // Nose
+                ctx.fillStyle = '#ff69b4';
+                ctx.beginPath();
+                ctx.moveTo(20, 12);
+                ctx.lineTo(17, 15);
+                ctx.lineTo(23, 15);
+                ctx.closePath();
+                ctx.fill();
+
+                // Whiskers
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1;
+                // Left whiskers
+                ctx.beginPath();
+                ctx.moveTo(10, 14);
+                ctx.lineTo(-5, 10);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(10, 16);
+                ctx.lineTo(-5, 16);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(10, 18);
+                ctx.lineTo(-5, 22);
+                ctx.stroke();
+                // Right whiskers
+                ctx.beginPath();
+                ctx.moveTo(30, 14);
+                ctx.lineTo(45, 10);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(30, 16);
+                ctx.lineTo(45, 16);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(30, 18);
+                ctx.lineTo(45, 22);
+                ctx.stroke();
+
+                // Tail
+                ctx.strokeStyle = '#ff8c00';
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(35, 45);
+                ctx.quadraticCurveTo(55, 35, 50, 20);
+                ctx.stroke();
+
+                // Stripes on body
+                ctx.strokeStyle = '#cc7000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(10, 30);
+                ctx.lineTo(30, 30);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(8, 38);
+                ctx.lineTo(32, 38);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(10, 46);
+                ctx.lineTo(30, 46);
+                ctx.stroke();
+
+                // Paws
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.ellipse(10, 58, 6, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(30, 58, 6, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
             if (c.isHotDog) {
                 // Hot dog bun (covers the body)
                 ctx.fillStyle = '#daa520'; // Golden bun color
@@ -1466,6 +2054,162 @@
                 ctx.fillStyle = '#1a1a8e';
                 ctx.fillRect(10, 58, 8, 10);
                 ctx.fillRect(22, 58, 8, 10);
+            }
+
+            if (c.isGlitch) {
+                // Glitchy character - constantly shifting colors and jittering
+                const glitchColors = ['#00ff00', '#ff00ff', '#00ffff'];
+                const time = Date.now();
+
+                // Glitchy aura
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+                ctx.fillRect(-5 + Math.random() * 4, -5 + Math.random() * 4, 50, 75);
+
+                // Body - glitchy rectangles
+                ctx.fillStyle = glitchColors[Math.floor(time / 100) % 3];
+                ctx.fillRect(5 + (Math.random() - 0.5) * 4, 20, 30, 30);
+
+                // Glitch fragments around body
+                ctx.fillStyle = glitchColors[(Math.floor(time / 80) + 1) % 3];
+                ctx.fillRect(-5 + Math.random() * 3, 25, 8, 12);
+                ctx.fillRect(37 + Math.random() * 3, 30, 8, 10);
+
+                // Head - pixelated/glitchy
+                ctx.fillStyle = glitchColors[(Math.floor(time / 60) + 2) % 3];
+                ctx.fillRect(3 + (Math.random() - 0.5) * 3, 0, 34, 22);
+
+                // Scan lines effect on head
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                for (let i = 0; i < 5; i++) {
+                    ctx.fillRect(3, i * 4, 34, 1);
+                }
+
+                // Glitch eyes - red error symbols
+                ctx.fillStyle = '#ff0000';
+                ctx.font = 'bold 10px monospace';
+                ctx.fillText('X', 10, 14);
+                ctx.fillText('X', 24, 14);
+
+                // Binary/code floating around
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '8px monospace';
+                const binary = ['0', '1', 'E', 'R', 'R'];
+                for (let i = 0; i < 5; i++) {
+                    const bx = -10 + Math.random() * 60;
+                    const by = -10 + Math.random() * 80;
+                    ctx.fillText(binary[Math.floor(Math.random() * binary.length)], bx, by);
+                }
+
+                // Legs - jittering
+                ctx.fillStyle = glitchColors[Math.floor(time / 90) % 3];
+                ctx.fillRect(8 + (Math.random() - 0.5) * 3, 50, 10, 18);
+                ctx.fillRect(22 + (Math.random() - 0.5) * 3, 50, 10, 18);
+
+                // Corruption lines
+                ctx.strokeStyle = '#ff00ff';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(Math.random() * 40, Math.random() * 70);
+                    ctx.lineTo(Math.random() * 40, Math.random() * 70);
+                    ctx.stroke();
+                }
+            }
+
+            if (c.isInfinity) {
+                const time = Date.now();
+                const rainbowColors = ['#ff0000', '#ff7700', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff'];
+
+                // COSMIC AURA - multiple expanding rings
+                for (let ring = 0; ring < 3; ring++) {
+                    const ringSize = 40 + ring * 15 + Math.sin(time / 200 + ring) * 10;
+                    const colorIndex = Math.floor(time / 100 + ring) % 7;
+                    ctx.strokeStyle = rainbowColors[colorIndex];
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(20, 35, ringSize, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                // Glowing body - rainbow shifting
+                const bodyColor = rainbowColors[Math.floor(time / 80) % 7];
+                ctx.fillStyle = bodyColor;
+                ctx.shadowColor = bodyColor;
+                ctx.shadowBlur = 25;
+                ctx.fillRect(5, 20, 30, 30);
+
+                // Infinity symbol on chest
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(12, 35);
+                ctx.bezierCurveTo(8, 28, 8, 42, 12, 35);
+                ctx.bezierCurveTo(16, 28, 24, 42, 28, 35);
+                ctx.bezierCurveTo(32, 28, 32, 42, 28, 35);
+                ctx.stroke();
+
+                // Head with crown/halo
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.arc(20, 8, 14, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Rotating halo
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.ellipse(20, -5, 18, 6, Math.sin(time / 300) * 0.3, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Crown spikes
+                ctx.fillStyle = '#ffd700';
+                for (let i = 0; i < 5; i++) {
+                    const angle = -Math.PI/2 + (i - 2) * 0.4;
+                    const spikeX = 20 + Math.cos(angle) * 16;
+                    const spikeY = 8 + Math.sin(angle) * 16;
+                    ctx.beginPath();
+                    ctx.moveTo(spikeX, spikeY);
+                    ctx.lineTo(spikeX + Math.cos(angle) * 8, spikeY + Math.sin(angle) * 8);
+                    ctx.lineTo(spikeX + 3, spikeY);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                // Glowing eyes - white with rainbow pupils
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(14, 8, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(26, 8, 5, 0, Math.PI * 2);
+                ctx.fill();
+                // Rainbow pupils
+                ctx.fillStyle = rainbowColors[Math.floor(time / 50) % 7];
+                ctx.beginPath();
+                ctx.arc(14, 8, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(26, 8, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Legs - rainbow
+                ctx.fillStyle = rainbowColors[(Math.floor(time / 100) + 3) % 7];
+                ctx.fillRect(8, 50, 10, 18);
+                ctx.fillRect(22, 50, 10, 18);
+
+                // Floating stars around
+                ctx.fillStyle = '#fff';
+                for (let i = 0; i < 8; i++) {
+                    const starAngle = (time / 500 + i * 0.8) % (Math.PI * 2);
+                    const starDist = 35 + Math.sin(time / 200 + i) * 10;
+                    const sx = 20 + Math.cos(starAngle) * starDist;
+                    const sy = 35 + Math.sin(starAngle) * starDist * 0.6;
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.shadowBlur = 0;
             }
 
             ctx.restore();
@@ -2105,6 +2849,61 @@
                 ctx.arc(fb.x - 5, fb.y - 5, 4, 0, Math.PI * 2);
                 ctx.fillStyle = 'rgba(255,255,255,0.4)';
                 ctx.fill();
+            } else if (fb.isSkull) {
+                // Shadow skull projectile
+                ctx.fillStyle = '#1a0033';
+                ctx.shadowColor = '#660066';
+                ctx.shadowBlur = 10;
+                // Skull shape
+                ctx.beginPath();
+                ctx.arc(fb.x, fb.y, fb.size, 0, Math.PI * 2);
+                ctx.fill();
+                // Eyes
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(fb.x - 4, fb.y - 2, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(fb.x + 4, fb.y - 2, 3, 0, Math.PI * 2);
+                ctx.fill();
+                // Mouth
+                ctx.fillStyle = '#000';
+                ctx.fillRect(fb.x - 5, fb.y + 3, 10, 4);
+                ctx.shadowBlur = 0;
+            } else if (fb.isGlitchBolt) {
+                // Glitch projectile - color shifting corruption
+                const glitchColors = ['#00ff00', '#ff00ff', '#00ffff', '#ff0000', '#ffff00'];
+                const colorIndex = Math.floor(Date.now() / 50) % glitchColors.length;
+                ctx.fillStyle = glitchColors[colorIndex];
+                ctx.shadowColor = glitchColors[(colorIndex + 2) % glitchColors.length];
+                ctx.shadowBlur = 15;
+                // Glitchy square shape that jitters
+                const jitterX = (Math.random() - 0.5) * 4;
+                const jitterY = (Math.random() - 0.5) * 4;
+                ctx.fillRect(fb.x - fb.size/2 + jitterX, fb.y - fb.size/2 + jitterY, fb.size, fb.size);
+                // Additional glitch fragments
+                ctx.fillStyle = glitchColors[(colorIndex + 1) % glitchColors.length];
+                ctx.fillRect(fb.x - fb.size/4 + jitterX * 2, fb.y - fb.size + jitterY, fb.size/2, fb.size/2);
+                ctx.fillRect(fb.x + fb.size/3 + jitterX, fb.y + jitterY * 2, fb.size/2, fb.size/2);
+                ctx.shadowBlur = 0;
+            } else if (fb.isGlitchLaser) {
+                // Glitch sniper laser - color shifting beam
+                const glitchColors = ['#00ff00', '#ff00ff', '#00ffff'];
+                const colorIndex = Math.floor(Date.now() / 30) % 3;
+                ctx.fillStyle = glitchColors[colorIndex];
+                ctx.shadowColor = glitchColors[(colorIndex + 1) % 3];
+                ctx.shadowBlur = 20;
+                // Long laser beam
+                ctx.fillRect(fb.x - 40, fb.y - 3, 80, 6);
+                // Core
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(fb.x - 35, fb.y - 1, 70, 2);
+                // Glitch fragments along beam
+                ctx.fillStyle = glitchColors[(colorIndex + 2) % 3];
+                for (let i = 0; i < 5; i++) {
+                    ctx.fillRect(fb.x - 30 + i * 15 + Math.random() * 4, fb.y - 5, 4, 10);
+                }
+                ctx.shadowBlur = 0;
             } else if (fb.isLaser) {
                 // Laser beam - red energy
                 ctx.fillStyle = '#ff0000';
@@ -2127,6 +2926,36 @@
                 ctx.beginPath();
                 ctx.arc(fb.x + 4, fb.y - 2, 4, 0, Math.PI * 2);
                 ctx.fill();
+            } else if (fb.isLaser) {
+                // Blue laser beam (4 blocks high)
+                ctx.fillStyle = '#00ffff';
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 20;
+                // Main beam
+                ctx.fillRect(fb.x - 25, fb.y - 6, 50, 12);
+                // Inner glow
+                ctx.fillStyle = '#88ffff';
+                ctx.fillRect(fb.x - 20, fb.y - 4, 40, 8);
+                // Core
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(fb.x - 15, fb.y - 2, 30, 4);
+                ctx.shadowBlur = 0;
+            } else if (fb.isScratch) {
+                // Cat scratch marks
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(fb.x - 8, fb.y - 8);
+                ctx.lineTo(fb.x + 8, fb.y + 8);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(fb.x - 5, fb.y - 10);
+                ctx.lineTo(fb.x + 5, fb.y + 6);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(fb.x - 10, fb.y - 5);
+                ctx.lineTo(fb.x + 6, fb.y + 10);
+                ctx.stroke();
             } else if (fb.isSniper) {
                 // MEGA sniper laser beam
                 ctx.fillStyle = '#ff0000';
@@ -2628,20 +3457,42 @@
 
             // Draw god bombs
             for (let bomb of godBombs) {
-                ctx.fillStyle = '#333';
-                ctx.beginPath();
-                ctx.arc(bomb.x, bomb.y, bomb.radius, 0, Math.PI * 2);
-                ctx.fill();
-                // Fuse spark
-                ctx.fillStyle = bomb.timer < 20 ? '#ff0000' : '#ff6600';
-                ctx.beginPath();
-                ctx.arc(bomb.x, bomb.y - bomb.radius - 5, 4 + Math.sin(Date.now()/50) * 2, 0, Math.PI * 2);
-                ctx.fill();
-                // Skull
-                ctx.fillStyle = '#ffd700';
-                ctx.beginPath();
-                ctx.arc(bomb.x, bomb.y - 2, 4, 0, Math.PI * 2);
-                ctx.fill();
+                if (bomb.isGlitchBomb) {
+                    // Glitchy bomb - color shifting
+                    const glitchColors = ['#00ff00', '#ff00ff', '#00ffff'];
+                    const colorIndex = Math.floor(Date.now() / 50) % 3;
+                    ctx.fillStyle = glitchColors[colorIndex];
+                    ctx.shadowColor = glitchColors[(colorIndex + 1) % 3];
+                    ctx.shadowBlur = 15;
+                    ctx.beginPath();
+                    ctx.arc(bomb.x, bomb.y, bomb.radius || 12, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Glitch fuse
+                    ctx.fillStyle = glitchColors[(colorIndex + 2) % 3];
+                    ctx.beginPath();
+                    ctx.arc(bomb.x + (Math.random() - 0.5) * 4, bomb.y - (bomb.radius || 12) - 5, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Binary symbol
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold 10px monospace';
+                    ctx.fillText(bomb.timer % 2 === 0 ? '0' : '1', bomb.x - 4, bomb.y + 4);
+                    ctx.shadowBlur = 0;
+                } else {
+                    ctx.fillStyle = '#333';
+                    ctx.beginPath();
+                    ctx.arc(bomb.x, bomb.y, bomb.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Fuse spark
+                    ctx.fillStyle = bomb.timer < 20 ? '#ff0000' : '#ff6600';
+                    ctx.beginPath();
+                    ctx.arc(bomb.x, bomb.y - bomb.radius - 5, 4 + Math.sin(Date.now()/50) * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Skull
+                    ctx.fillStyle = '#ffd700';
+                    ctx.beginPath();
+                    ctx.arc(bomb.x, bomb.y - 2, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
 
             // Particles
